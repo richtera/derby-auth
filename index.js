@@ -66,7 +66,7 @@ function setupMiddleware(strategies, options) {
             sess.userId = model.id();
             var schema = _.cloneDeep(options.schema);
             _.defaults(schema, {auth:{}}); // make sure user schema is defaulted with at least {auth:{}}
-            model.set("users." + sess.userId, schema);
+            return model.set("users." + sess.userId, schema, next);
         }
 
         return next();
@@ -242,7 +242,9 @@ function setupStaticRoutes(expressApp, strategies, options) {
             var userObj = result.get();
 
             // current user already registered, return
-            if (model.get('users.' + sess.userId + '.auth.local')) return res.redirect('/');
+            if (model.get('users.' + sess.userId + '.auth.local'), function (err) {
+              return res.redirect('/');
+            });
 
             if (userObj) {
                 // a user already registered with that name, TODO send error message
@@ -256,11 +258,15 @@ function setupStaticRoutes(expressApp, strategies, options) {
                         salt: salt,
                         hashed_password: utils.encryptPassword(req.body.password, salt)
                     };
-                model.set('users.' + sess.userId + '.auth.local', localAuth);
-                model.set('users.' + sess.userId + '.auth.timestamps.created', new Date());
-                req.login(sess.userId, function(err) {
+                model.set('users.' + sess.userId + '.auth.local', localAuth, function (err) {
+                  if (err) { return next(err); }
+                  model.set('users.' + sess.userId + '.auth.timestamps.created', new Date(), function (err) {
                     if (err) { return next(err); }
-                    return res.redirect('/');
+                    req.login(sess.userId, function(err) {
+                        if (err) { return next(err); }
+                        return res.redirect('/');
+                    });
+                  });
                 });
             }
         });
